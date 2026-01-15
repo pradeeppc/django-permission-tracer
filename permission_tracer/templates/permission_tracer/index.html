@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if title %}{{ title }}{% else %}Permission Tracer{% endif %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .header p {
+            margin-top: 0.5rem;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1rem;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .search-box {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            transition: border-color 0.2s;
+        }
+        
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .card h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        
+        .permission-item, .endpoint-item {
+            padding: 0.75rem;
+            border-left: 3px solid #667eea;
+            background: #f9f9f9;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .permission-item:hover, .endpoint-item:hover {
+            background: #f0f0f0;
+            transform: translateX(4px);
+        }
+        
+        .permission-name, .endpoint-path {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 0.25rem;
+        }
+        
+        .permission-usage, .endpoint-permissions {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 0.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #667eea;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Permission Tracer</h1>
+        <p>Trace and visualize Django permissions across your API</p>
+    </div>
+    
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="permissions">Permissions</button>
+            <button class="tab" data-tab="endpoints">Endpoints</button>
+            <button class="tab" data-tab="graph">Graph View</button>
+            <button class="tab" data-tab="trace">Trace</button>
+        </div>
+        
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <div class="stats" id="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-endpoints">-</div>
+                    <div class="stat-label">Total Endpoints</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-permissions">-</div>
+                    <div class="stat-label">Total Permissions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-traces">-</div>
+                    <div class="stat-label">Traced Requests</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>Quick Search</h3>
+                <input type="text" class="search-box" id="quick-search" placeholder="Search permissions or endpoints...">
+                <div id="quick-search-results"></div>
+            </div>
+        </div>
+        
+        <!-- Permissions Tab -->
+        <div id="permissions" class="tab-content">
+            <div class="card">
+                <h3>All Permissions</h3>
+                <input type="text" class="search-box" id="permission-search" placeholder="Search permissions...">
+                <div id="permissions-list"></div>
+            </div>
+        </div>
+        
+        <!-- Endpoints Tab -->
+        <div id="endpoints" class="tab-content">
+            <div class="card">
+                <h3>All Endpoints</h3>
+                <input type="text" class="search-box" id="endpoint-search" placeholder="Search endpoints...">
+                <div id="endpoints-list"></div>
+            </div>
+        </div>
+        
+        <!-- Graph Tab -->
+        <div id="graph" class="tab-content">
+            <div class="card">
+                <h3>Permission Graph</h3>
+                <div class="graph-container" id="graph-container">
+                    <div class="loading">Loading graph...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Trace Tab -->
+        <div id="trace" class="tab-content">
+            <div class="card">
+                <h3>Request Traces</h3>
+                <div id="traces-list"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let analysisData = null;
+        
+        // Tab switching
+        function showTab(tabName, clickedElement) {
+            // Remove active from all tabs and content
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active to clicked tab
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            }
+            
+            // Add active to corresponding content
+            const contentElement = document.getElementById(tabName);
+            if (contentElement) {
+                contentElement.classList.add('active');
+            } else {
+                console.error('Tab content not found:', tabName);
+                return;
+            }
+            
+            // Load data for specific tabs
+            if (tabName === 'graph') {
+                loadGraph();
+            } else if (tabName === 'trace') {
+                loadTraces();
+            } else if (tabName === 'permissions') {
+                loadPermissions();
+            } else if (tabName === 'endpoints') {
+                loadEndpoints();
+            }
+        }
+        
+        // Load overview data
+        async function loadOverview() {
+            try {
+                const response = await fetch('/_permission-tracer/api/');
+                
+                // Check if response is OK
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('API Error - Status:', response.status, 'Response:', text.substring(0, 200));
+                    document.getElementById('stat-endpoints').textContent = 'Error';
+                    document.getElementById('stat-permissions').textContent = 'Error';
+                    return;
+                }
+                
+                // Check content type
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('API returned non-JSON:', contentType, 'Response:', text.substring(0, 200));
+                    document.getElementById('stat-endpoints').textContent = 'Error';
+                    document.getElementById('stat-permissions').textContent = 'Error';
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    analysisData = result.data;
+                    document.getElementById('stat-endpoints').textContent = result.data.total_endpoints || 0;
+                    document.getElementById('stat-permissions').textContent = result.data.total_permissions || 0;
+                    
+                    // Load trace count
+                    loadTraceCount();
+                } else {
+                    console.error('API Error:', result.message);
+                    document.getElementById('stat-endpoints').textContent = 'Error';
+                    document.getElementById('stat-permissions').textContent = 'Error';
+                    if (result.traceback) {
+                        console.error('Traceback:', result.traceback);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading overview:', error);
+                document.getElementById('stat-endpoints').textContent = 'Error';
+                document.getElementById('stat-permissions').textContent = 'Error';
+            }
+        }
+        
+        // Load trace count
+        async function loadTraceCount() {
+            try {
+                const response = await fetch('/_permission-tracer/api/trace/');
+                const result = await response.json();
+                if (result.status === 'success') {
+                    document.getElementById('stat-traces').textContent = result.total || 0;
+                }
+            } catch (error) {
+                console.error('Error loading trace count:', error);
+            }
+        }
+        
+        // Load permissions list
+        async function loadPermissions() {
+            if (!analysisData) {
+                await loadOverview();
+            }
+            
+            const container = document.getElementById('permissions-list');
+            container.innerHTML = '';
+            
+            if (!analysisData || !analysisData.permission_endpoints) {
+                container.innerHTML = '<div class="loading">Loading permissions...</div>';
+                return;
+            }
+            
+            const permissions = Object.keys(analysisData.permission_endpoints || {});
+            
+            if (permissions.length === 0) {
+                container.innerHTML = '<div class="loading">No permissions found. Make sure your views have permission_classes defined.</div>';
+                return;
+            }
+            
+            // Sort permissions by usage count (most used first)
+            const sortedPermissions = permissions.sort((a, b) => {
+                return analysisData.permission_endpoints[b].length - analysisData.permission_endpoints[a].length;
+            });
+            
+            sortedPermissions.forEach(permName => {
+                const endpoints = analysisData.permission_endpoints[permName];
+                const permDisplayName = permName.split('.').pop();
+                const item = document.createElement('div');
+                item.className = 'permission-item';
+                item.innerHTML = `
+                    <div class="permission-name">${permDisplayName}</div>
+                    <div class="permission-usage">Used in ${endpoints.length} endpoint(s)</div>
+                    <div class="permission-full-path" style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">${permName}</div>
+                `;
+                item.onclick = () => showPermissionDetail(permName);
+                container.appendChild(item);
+            });
+        }
+        
+        // Load endpoints list
+        async function loadEndpoints() {
+            if (!analysisData) {
+                await loadOverview();
+            }
+            
+            const container = document.getElementById('endpoints-list');
+            container.innerHTML = '';
+            
+            if (!analysisData || !analysisData.endpoint_permissions) {
+                container.innerHTML = '<div class="loading">Loading endpoints...</div>';
+                return;
+            }
+            
+            const endpoints = Object.entries(analysisData.endpoint_permissions || {});
+            
+            if (endpoints.length === 0) {
+                container.innerHTML = '<div class="loading">No endpoints found. The analyzer might need to discover your URL patterns.</div>';
+                return;
+            }
+            
+            endpoints.forEach(([key, info]) => {
+                const item = document.createElement('div');
+                item.className = 'endpoint-item';
+                item.innerHTML = `
+                    <div class="endpoint-path">${info.path}</div>
+                    <div class="endpoint-permissions">
+                        ${info.permissions.length} permission(s): ${info.permissions.length > 0 ? info.permissions.map(p => p.split('.').pop()).join(', ') : 'None'}
+                    </div>
+                `;
+                item.onclick = () => showEndpointDetail(info.path);
+                container.appendChild(item);
+            });
+        }
+        
+        // Load graph
+        async function loadGraph() {
+            const container = document.getElementById('graph-container');
+            container.innerHTML = '<div class="loading">Loading graph...</div>';
+            
+            try {
+                const response = await fetch('/_permission-tracer/api/graph/');
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    container.innerHTML = `<div class="error">API Error (${response.status}): ${text.substring(0, 200)}</div>`;
+                    return;
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    container.innerHTML = `<div class="error">API returned non-JSON. Response: ${text.substring(0, 200)}</div>`;
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    renderGraph(result.data);
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.message || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                console.error('Error loading graph:', error);
+                container.innerHTML = `<div class="error">Error loading graph: ${error.message}</div>`;
+            }
+        }
+        
+        // Simple graph rendering (can be enhanced with a library like vis.js or d3.js)
+        function renderGraph(graphData) {
+            const container = document.getElementById('graph-container');
+            
+            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+                container.innerHTML = '<div class="loading">No graph data available. Make sure you have endpoints with permissions defined.</div>';
+                return;
+            }
+            
+            // Group nodes by type
+            const permissionNodes = graphData.nodes.filter(n => n.type === 'permission');
+            const endpointNodes = graphData.nodes.filter(n => n.type === 'endpoint');
+            
+            if (permissionNodes.length === 0 && endpointNodes.length === 0) {
+                container.innerHTML = '<div class="loading">No permissions or endpoints found in graph data.</div>';
+                return;
+            }
+            
+            // Create a simple visual representation
+            let html = '<div style="padding: 1.5rem; max-height: 550px; overflow-y: auto;">';
+            
+            // Show permissions (sorted by usage)
+            if (permissionNodes.length > 0) {
+                // Sort permissions by connection count - use edge_count if available, otherwise count edges
+                const sortedPermissions = permissionNodes.sort((a, b) => {
+                    const aCount = a.edge_count !== undefined ? a.edge_count : graphData.edges.filter(e => e.from === a.id).length;
+                    const bCount = b.edge_count !== undefined ? b.edge_count : graphData.edges.filter(e => e.from === b.id).length;
+                    return bCount - aCount;
+                });
+                
+                html += '<h4 style="margin-bottom: 1rem; color: #667eea;">Permissions (' + permissionNodes.length + ')</h4>';
+                sortedPermissions.forEach(node => {
+                    // Use edge_count if available (matches permission_endpoints count), otherwise count edges
+                    const connectedEndpoints = node.edge_count !== undefined ? node.edge_count : graphData.edges.filter(e => e.from === node.id).length;
+                    const fullName = node.full_name || node.label;
+                    html += `
+                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #e3f2fd; border-left: 4px solid #667eea; border-radius: 4px;">
+                            <strong>🔐 ${node.label}</strong>
+                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
+                                Connected to ${connectedEndpoints} endpoint(s)
+                            </div>
+                            ${fullName !== node.label ? `<div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem; font-family: monospace;">${fullName}</div>` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            // Show endpoints
+            if (endpointNodes.length > 0) {
+                html += '<h4 style="margin-top: 2rem; margin-bottom: 1rem; color: #667eea;">Endpoints (' + endpointNodes.length + ')</h4>';
+                endpointNodes.slice(0, 20).forEach(node => {
+                    const connectedPermissions = graphData.edges.filter(e => e.to === node.id).length;
+                    html += `
+                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #f5f5f5; border-left: 4px solid #4caf50; border-radius: 4px;">
+                            <strong>📡 ${node.label}</strong>
+                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
+                                Protected by ${connectedPermissions} permission(s)
+                            </div>
+                        </div>
+                    `;
+                });
+                if (endpointNodes.length > 20) {
+                    html += `<div style="margin-top: 0.5rem; color: #666; font-style: italic;">... and ${endpointNodes.length - 20} more endpoints</div>`;
+                }
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        // Load traces
+        async function loadTraces() {
+            try {
+                const response = await fetch('/_permission-tracer/api/trace/');
+                
+                const container = document.getElementById('traces-list');
+                container.innerHTML = '';
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    container.innerHTML = `<div class="error">API Error (${response.status}): ${text.substring(0, 200)}</div>`;
+                    return;
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    container.innerHTML = `<div class="error">API returned non-JSON. Response: ${text.substring(0, 200)}</div>`;
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    if (result.data.length === 0) {
+                        container.innerHTML = `
+                            <div class="loading">
+                                <p><strong>No traces yet.</strong></p>
+                                <p>To see traces:</p>
+                                <ol style="text-align: left; display: inline-block;">
+                                    <li>Make some API requests to your endpoints</li>
+                                    <li>Come back here to see which permissions were checked</li>
+                                </ol>
+                                <p style="margin-top: 1rem;"><em>Tip: Try the "Overview" tab to see all your permissions and endpoints!</em></p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    result.data.forEach((trace, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'card';
+                        item.innerHTML = `
+                            <h3>${trace.method} ${trace.path}</h3>
+                            <p>Status: ${trace.status_code} | Duration: ${(trace.duration * 1000).toFixed(2)}ms</p>
+                            <p>Permissions checked: ${trace.permissions_checked.length}</p>
+                            <p>View: ${trace.view_class ? trace.view_class.name : 'N/A'}</p>
+                            ${trace.permissions_checked.length > 0 ? `<p><strong>Permissions:</strong> ${trace.permissions_checked.map(p => p.split('.').pop()).join(', ')}</p>` : ''}
+                        `;
+                        container.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.message || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                console.error('Error loading traces:', error);
+                document.getElementById('traces-list').innerHTML = 
+                    `<div class="error">Error loading traces: ${error.message}</div>`;
+            }
+        }
+        
+        // Search functionality
+        document.getElementById('quick-search')?.addEventListener('input', async (e) => {
+            const query = e.target.value;
+            if (query.length < 2) {
+                document.getElementById('quick-search-results').innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/_permission-tracer/api/search/?q=${encodeURIComponent(query)}&type=all`);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    const container = document.getElementById('quick-search-results');
+                    container.innerHTML = '';
+                    
+                    if (result.data.permissions.length === 0 && result.data.endpoints.length === 0) {
+                        container.innerHTML = '<div class="loading">No results found</div>';
+                        return;
+                    }
+                    
+                    result.data.permissions.forEach(perm => {
+                        const item = document.createElement('div');
+                        item.className = 'permission-item';
+                        item.innerHTML = `
+                            <div class="permission-name">${perm.name.split('.').pop()}</div>
+                            <div class="permission-usage">Used in ${perm.usage_count} endpoint(s)</div>
+                        `;
+                        container.appendChild(item);
+                    });
+                    
+                    result.data.endpoints.forEach(endpoint => {
+                        const item = document.createElement('div');
+                        item.className = 'endpoint-item';
+                        item.innerHTML = `
+                            <div class="endpoint-path">${endpoint.path}</div>
+                            <div class="endpoint-permissions">${endpoint.permissions.length} permission(s)</div>
+                        `;
+                        container.appendChild(item);
+                    });
+                }
+            } catch (error) {
+                console.error('Error searching:', error);
+            }
+        });
+        
+        // Show permission detail
+        async function showPermissionDetail(permissionName) {
+            if (!analysisData) {
+                alert('Data not loaded yet. Please wait...');
+                return;
+            }
+            
+            const endpoints = analysisData.permission_endpoints[permissionName] || [];
+            
+            // Fetch permission implementation details
+            let implementation = null;
+            try {
+                const response = await fetch(`/_permission-tracer/api/permission/${encodeURIComponent(permissionName)}/`);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        implementation = result.data.implementation;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching permission details:', error);
+            }
+            
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem;
+            `;
+            
+            // Create modal content
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 2rem;
+                max-width: 900px;
+                max-height: 85vh;
+                overflow-y: auto;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                position: relative;
+            `;
+            
+            // Close button
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '×';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 1rem;
+                right: 1rem;
+                background: none;
+                border: none;
+                font-size: 2rem;
+                cursor: pointer;
+                color: #666;
+                width: 2rem;
+                height: 2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10;
+            `;
+            closeBtn.onclick = () => document.body.removeChild(modal);
+            
+            // Modal header
+            const header = document.createElement('div');
+            header.innerHTML = `
+                <h2 style="margin: 0 0 0.5rem 0; color: #667eea;">${permissionName.split('.').pop()}</h2>
+                <p style="color: #666; margin: 0 0 0.5rem 0; font-family: monospace; font-size: 0.9rem;">${permissionName}</p>
+                <p style="color: #333; margin: 0 0 1.5rem 0;"><strong>Used in ${endpoints.length} endpoint(s)</strong></p>
+            `;
+            
+            // Tabs for different sections
+            const tabsContainer = document.createElement('div');
+            tabsContainer.style.cssText = 'display: flex; gap: 1rem; border-bottom: 2px solid #e0e0e0; margin-bottom: 1.5rem;';
+            
+            const tabs = {
+                'endpoints': { label: 'Endpoints', active: true },
+                'implementation': { label: 'Implementation', active: false },
+                'logic': { label: 'Logic Summary', active: false }
+            };
+            
+            const tabButtons = {};
+            Object.keys(tabs).forEach(tabKey => {
+                const tabBtn = document.createElement('button');
+                tabBtn.textContent = tabs[tabKey].label;
+                tabBtn.style.cssText = `
+                    padding: 0.5rem 1rem;
+                    border: none;
+                    background: none;
+                    cursor: pointer;
+                    border-bottom: 3px solid ${tabs[tabKey].active ? '#667eea' : 'transparent'};
+                    color: ${tabs[tabKey].active ? '#667eea' : '#666'};
+                    font-weight: ${tabs[tabKey].active ? '600' : '400'};
+                `;
+                tabButtons[tabKey] = tabBtn;
+                tabsContainer.appendChild(tabBtn);
+            });
+            
+            // Content sections
+            const contentContainer = document.createElement('div');
+            contentContainer.id = 'permission-modal-content';
+            
+            // Endpoints tab content
+            const endpointsSection = document.createElement('div');
+            endpointsSection.id = 'tab-endpoints';
+            endpointsSection.style.display = 'block';
+            if (endpoints.length > 0) {
+                endpointsSection.innerHTML = '<h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">Endpoints using this permission:</h3>';
+                const list = document.createElement('div');
+                list.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem;';
+                
+                endpoints.slice(0, 50).forEach(endpoint => {
+                    const item = document.createElement('div');
+                    item.style.cssText = `
+                        padding: 0.75rem;
+                        background: #f5f5f5;
+                        border-left: 3px solid #667eea;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    `;
+                    item.innerHTML = `
+                        <div style="font-weight: 500; color: #333;">${endpoint.path}</div>
+                        <div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">${endpoint.view_class}</div>
+                    `;
+                    item.onclick = () => {
+                        document.body.removeChild(modal);
+                        showEndpointDetail(endpoint.path);
+                    };
+                    list.appendChild(item);
+                });
+                
+                if (endpoints.length > 50) {
+                    const more = document.createElement('div');
+                    more.style.cssText = 'padding: 0.5rem; color: #666; font-style: italic;';
+                    more.textContent = `... and ${endpoints.length - 50} more endpoints`;
+                    list.appendChild(more);
+                }
+                
+                endpointsSection.appendChild(list);
+            } else {
+                endpointsSection.innerHTML = '<p style="color: #666;">No endpoints found using this permission.</p>';
+            }
+            
+            // Implementation tab content
+            const implementationSection = document.createElement('div');
+            implementationSection.id = 'tab-implementation';
+            implementationSection.style.display = 'none';
+            if (implementation && implementation.source_code) {
+                implementationSection.innerHTML = `
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">Permission Class Implementation</h3>
+                    ${implementation.docstring ? `
+                        <div style="background: #e3f2fd; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: #1976d2;">Description:</h4>
+                            <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">${escapeHtml(implementation.docstring)}</pre>
+                        </div>
+                    ` : ''}
+                    ${implementation.has_permission && implementation.has_permission.docstring ? `
+                        <div style="background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                            <h4 style="margin: 0 0 0.5rem 0;">has_permission() Description:</h4>
+                            <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">${escapeHtml(implementation.has_permission.docstring)}</pre>
+                        </div>
+                    ` : ''}
+                    <div style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; overflow-x: auto;">
+                        <pre style="margin: 0; font-family: 'Courier New', monospace; font-size: 0.85rem; line-height: 1.5;"><code>${escapeHtml(implementation.source_code)}</code></pre>
+                    </div>
+                    ${implementation.has_permission && implementation.has_permission.source_code ? `
+                        <h4 style="margin: 1.5rem 0 1rem 0;">has_permission() Method:</h4>
+                        <div style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; overflow-x: auto;">
+                            <pre style="margin: 0; font-family: 'Courier New', monospace; font-size: 0.85rem; line-height: 1.5;"><code>${escapeHtml(implementation.has_permission.source_code)}</code></pre>
+                        </div>
+                    ` : ''}
+                    ${implementation.metadata && implementation.metadata.file_path ? `
+                        <div style="margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+                            <h4 style="margin: 0 0 0.5rem 0;">File Information:</h4>
+                            <div style="font-family: monospace; font-size: 0.9rem;">
+                                <div><strong>Path:</strong> ${escapeHtml(implementation.metadata.file_path)}</div>
+                                ${implementation.metadata.line_number ? `<div style="margin-top: 0.25rem;"><strong>Line:</strong> ${implementation.metadata.line_number}${implementation.metadata.total_lines ? ` (${implementation.metadata.total_lines} lines)` : ''}</div>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${implementation.metadata && implementation.metadata.methods && implementation.metadata.methods.length > 0 ? `
+                        <div style="margin-top: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 4px;">
+                            <h4 style="margin: 0 0 0.5rem 0;">Class Methods:</h4>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${implementation.metadata.methods.map(method => `
+                                    <span style="padding: 0.25rem 0.75rem; background: white; border-radius: 4px; font-family: monospace; font-size: 0.9rem;">${method}()</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${implementation.metadata && implementation.metadata.is_builtin !== undefined ? `
+                        <div style="margin-top: 1rem; padding: 0.75rem; background: ${implementation.metadata.is_builtin ? '#fff3e0' : '#e8f5e9'}; border-radius: 4px;">
+                            <strong>Type:</strong> ${implementation.metadata.is_builtin ? 'Built-in Django/DRF Permission' : 'Custom Permission Class'}
+                        </div>
+                    ` : ''}
+                `;
+            } else if (implementation && implementation.error) {
+                implementationSection.innerHTML = `
+                    <div style="background: #ffebee; padding: 1rem; border-radius: 4px; border-left: 4px solid #f44336;">
+                        <p style="margin: 0; color: #c62828;"><strong>Error:</strong> ${escapeHtml(implementation.error)}</p>
+                    </div>
+                `;
+            } else {
+                implementationSection.innerHTML = `
+                    <div style="background: #fff3e0; padding: 1rem; border-radius: 4px;">
+                        <p style="margin: 0; color: #e65100;">Could not load implementation details. The permission class may be dynamically generated or not accessible.</p>
+                    </div>
+                `;
+            }
+            
+            // Logic summary tab content
+            const logicSection = document.createElement('div');
+            logicSection.id = 'tab-logic';
+            logicSection.style.display = 'none';
+            if (implementation && implementation.logic_summary) {
+                const logic = implementation.logic_summary;
+                
+                // Count detected checks
+                const checks = [
+                    { key: 'checks_feature_flags', label: 'Checks Feature Flags', desc: 'Verifies if required features are enabled', color: '#4caf50', bg: '#e8f5e9' },
+                    { key: 'checks_roles', label: 'Checks Roles', desc: 'Verifies user\'s role assignments', color: '#2196f3', bg: '#e3f2fd' },
+                    { key: 'checks_permissions', label: 'Checks Permissions', desc: 'Verifies specific permission codes', color: '#ff9800', bg: '#fff3e0' },
+                    { key: 'checks_user', label: 'Checks User', desc: 'Performs user-specific validation', color: '#9c27b0', bg: '#f3e5f5' },
+                    { key: 'checks_groups', label: 'Checks Groups', desc: 'Verifies user group membership', color: '#00bcd4', bg: '#e0f7fa' },
+                    { key: 'checks_authentication', label: 'Checks Authentication', desc: 'Verifies if user is authenticated', color: '#607d8b', bg: '#eceff1' },
+                    { key: 'checks_action', label: 'Checks Action', desc: 'Different logic for different actions', color: '#e91e63', bg: '#fce4ec' },
+                    { key: 'checks_method', label: 'Checks HTTP Method', desc: 'Different checks for GET, POST, etc.', color: '#ffc107', bg: '#fff8e1' },
+                    { key: 'raises_exceptions', label: 'Raises Exceptions', desc: 'Raises PermissionDenied on failure', color: '#f44336', bg: '#ffebee' },
+                ].filter(check => logic[check.key]);
+                
+                logicSection.innerHTML = `
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">What This Permission Does</h3>
+                    ${checks.length > 0 ? `
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                            ${checks.map(check => `
+                                <div style="background: ${check.bg}; padding: 1rem; border-radius: 4px; border-left: 4px solid ${check.color};">
+                                    <strong>✓ ${check.label}</strong>
+                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #666;">${check.desc}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div style="background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+                            <p style="margin: 0; color: #666;">No specific patterns detected. This permission may have custom logic. Check the implementation tab for details.</p>
+                        </div>
+                    `}
+                    ${logic.conditions && logic.conditions.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Key Conditions:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${logic.conditions.map(condition => `
+                                    <div style="background: #f5f5f5; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; font-family: monospace; font-size: 0.85rem; border-left: 3px solid #667eea;">${escapeHtml(condition)}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.base_classes && logic.base_classes.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Base Classes:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${logic.base_classes.map(cls => `
+                                    <span style="display: inline-block; background: #e0e0e0; padding: 0.25rem 0.75rem; border-radius: 4px; margin-right: 0.5rem; font-family: monospace; font-size: 0.9rem;">${cls}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.methods_called && logic.methods_called.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Methods Called:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${logic.methods_called.map(method => `
+                                    <span style="display: inline-block; background: #f5f5f5; padding: 0.25rem 0.75rem; border-radius: 4px; margin-right: 0.5rem; margin-bottom: 0.25rem; font-family: monospace; font-size: 0.9rem;">${method}()</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.imports && logic.imports.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Classes/Imports Referenced:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${logic.imports.map(imp => `
+                                    <span style="display: inline-block; background: #e3f2fd; padding: 0.25rem 0.75rem; border-radius: 4px; margin-right: 0.5rem; margin-bottom: 0.25rem; font-family: monospace; font-size: 0.9rem;">${imp}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.class_attributes && Object.keys(logic.class_attributes).length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Class Attributes:</strong>
+                            <div style="margin-top: 0.5rem; display: grid; gap: 0.5rem;">
+                                ${Object.entries(logic.class_attributes).map(([key, value]) => `
+                                    <div style="background: #f5f5f5; padding: 0.5rem; border-radius: 4px; border-left: 3px solid #667eea;">
+                                        <div style="font-weight: 500; font-family: monospace;">${key}</div>
+                                        <div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">
+                                            <span style="color: #999;">${value.type}:</span> ${escapeHtml(value.value)}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.method_signatures && Object.keys(logic.method_signatures).length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Other Methods:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${Object.entries(logic.method_signatures).map(([name, sig]) => `
+                                    <div style="background: #f5f5f5; padding: 0.75rem; border-radius: 4px; margin-bottom: 0.5rem;">
+                                        <div style="font-family: monospace; font-weight: 500;">${name}(${sig.parameters.join(', ')})</div>
+                                        ${sig.docstring ? `<div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">${escapeHtml(sig.docstring.substring(0, 150))}${sig.docstring.length > 150 ? '...' : ''}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.base_classes && logic.base_classes.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>Inheritance Chain:</strong>
+                            <div style="margin-top: 0.5rem;">
+                                ${logic.base_classes.map(cls => `
+                                    <div style="display: inline-block; background: #e0e0e0; padding: 0.25rem 0.75rem; border-radius: 4px; margin-right: 0.5rem; font-family: monospace; font-size: 0.9rem;">
+                                        ${cls.name}
+                                        ${cls.module !== 'builtins' ? `<span style="font-size: 0.75rem; color: #666; margin-left: 0.25rem;">(${cls.module})</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${logic.complexity_score !== undefined && logic.complexity_score > 0 ? `
+                        <div style="margin-top: 1rem; padding: 0.75rem; background: ${logic.complexity_score > 5 ? '#ffebee' : logic.complexity_score > 3 ? '#fff3e0' : '#e8f5e9'}; border-radius: 4px;">
+                            <strong>Complexity Score:</strong> ${logic.complexity_score}
+                            <div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">
+                                ${logic.complexity_score <= 2 ? 'Simple permission with basic checks' : 
+                                  logic.complexity_score <= 5 ? 'Moderate complexity with multiple conditions' : 
+                                  'Complex permission with many conditions and branches'}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+            } else {
+                logicSection.innerHTML = `
+                    <div style="background: #fff3e0; padding: 1rem; border-radius: 4px;">
+                        <p style="margin: 0; color: #e65100;">Could not analyze permission logic.</p>
+                    </div>
+                `;
+            }
+            
+            // Tab switching logic
+            function switchTab(activeTab) {
+                Object.keys(tabs).forEach(tabKey => {
+                    const isActive = tabKey === activeTab;
+                    tabs[tabKey].active = isActive;
+                    tabButtons[tabKey].style.borderBottomColor = isActive ? '#667eea' : 'transparent';
+                    tabButtons[tabKey].style.color = isActive ? '#667eea' : '#666';
+                    tabButtons[tabKey].style.fontWeight = isActive ? '600' : '400';
+                    document.getElementById(`tab-${tabKey}`).style.display = isActive ? 'block' : 'none';
+                });
+            }
+            
+            Object.keys(tabButtons).forEach(tabKey => {
+                tabButtons[tabKey].onclick = () => switchTab(tabKey);
+            });
+            
+            contentContainer.appendChild(endpointsSection);
+            contentContainer.appendChild(implementationSection);
+            contentContainer.appendChild(logicSection);
+            
+            modalContent.appendChild(closeBtn);
+            modalContent.appendChild(header);
+            modalContent.appendChild(tabsContainer);
+            modalContent.appendChild(contentContainer);
+            modal.appendChild(modalContent);
+            
+            // Close on background click
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            };
+            
+            document.body.appendChild(modal);
+        }
+        
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Show endpoint detail
+        function showEndpointDetail(endpointPath) {
+            if (!analysisData) {
+                alert('Data not loaded yet. Please wait...');
+                return;
+            }
+            
+            // Find the endpoint
+            let endpointInfo = null;
+            for (const [key, info] of Object.entries(analysisData.endpoint_permissions || {})) {
+                if (info.path === endpointPath) {
+                    endpointInfo = info;
+                    break;
+                }
+            }
+            
+            if (!endpointInfo) {
+                alert(`Endpoint not found: ${endpointPath}`);
+                return;
+            }
+            
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem;
+            `;
+            
+            // Create modal content
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 2rem;
+                max-width: 700px;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                position: relative;
+            `;
+            
+            // Close button
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '×';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 1rem;
+                right: 1rem;
+                background: none;
+                border: none;
+                font-size: 2rem;
+                cursor: pointer;
+                color: #666;
+                width: 2rem;
+                height: 2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            closeBtn.onclick = () => document.body.removeChild(modal);
+            
+            // Modal content
+            const perms = endpointInfo.permissions.length > 0 
+                ? endpointInfo.permissions.map(p => p.split('.').pop()).join(', ') 
+                : 'None';
+            
+            modalContent.innerHTML = `
+                <h2 style="margin: 0 0 1rem 0; color: #667eea;">Endpoint Details</h2>
+                <div style="margin-bottom: 1rem;">
+                    <strong>Path:</strong>
+                    <div style="font-family: monospace; background: #f5f5f5; padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem;">${endpointPath}</div>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <strong>View Class:</strong>
+                    <div style="font-family: monospace; background: #f5f5f5; padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem;">${endpointInfo.view_class}</div>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <strong>Permissions (${endpointInfo.permissions.length}):</strong>
+                    <div style="margin-top: 0.5rem;">
+                        ${endpointInfo.permissions.map(p => `
+                            <div style="padding: 0.5rem; background: #e3f2fd; border-left: 3px solid #667eea; border-radius: 4px; margin-bottom: 0.5rem; cursor: pointer;" onclick="showPermissionDetail('${p}'); document.body.removeChild(this.closest('[style*=\"position: fixed\"]'));">
+                                <div style="font-weight: 500;">${p.split('.').pop()}</div>
+                                <div style="font-size: 0.85rem; color: #666; font-family: monospace; margin-top: 0.25rem;">${p}</div>
+                            </div>
+                        `).join('')}
+                        ${endpointInfo.permissions.length === 0 ? '<div style="color: #666; font-style: italic;">No permissions defined</div>' : ''}
+                    </div>
+                </div>
+            `;
+            
+            modalContent.insertBefore(closeBtn, modalContent.firstChild);
+            modal.appendChild(modalContent);
+            
+            // Close on background click
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            };
+            
+            document.body.appendChild(modal);
+        }
+        
+        // Initialize when DOM is ready
+        function initializeApp() {
+            // Set up tab click handlers
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const tabName = this.getAttribute('data-tab');
+                    if (tabName) {
+                        showTab(tabName, this);
+                    }
+                });
+            });
+            
+            // Load overview data
+            loadOverview();
+        }
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+    </script>
+</body>
+</html>
+
