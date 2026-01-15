@@ -104,17 +104,8 @@ PERMISSION_TRACER = {
 2. **Static Analysis**: Automatically discovers permission classes from your viewsets and URL patterns
 3. **Visualization**: Provides an intuitive web interface to explore and understand permission mappings
 
-## Contributing
+<img width="1877" height="594" alt="image" src="https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24" />
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
 
 
 
