@@ -7,18 +7,23 @@ exposes permission source code and request traces.
 """
 
 import logging
-from urllib.parse import unquote
+from urllib.parse import unquote, urlencode
 
-from django.contrib.auth.views import redirect_to_login
-from django.http import Http404, HttpResponseForbidden, JsonResponse
-from django.shortcuts import render
-from django.urls import reverse
+from django.conf import settings
+from django.http import Http404, JsonResponse
+from django.shortcuts import render, resolve_url
+from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.views import View
 
 from . import conf, inspection, storage, tracing
 from .analyzer import PermissionAnalyzer
 
 logger = logging.getLogger(__name__)
+
+ACCESS_DENIED_MESSAGE = (
+    "Permission Tracer is restricted to staff users. "
+    "Log in as staff, or set PERMISSION_TRACER['ACCESS_CHECK'] in settings."
+)
 
 
 def _error(message, status):
@@ -27,6 +32,21 @@ def _error(message, status):
 
 def _success(data, **extra):
     return JsonResponse({"status": "success", "data": data, **extra})
+
+
+def _login_url(request):
+    """The project's login page if it exists, else the admin login, else None."""
+    query = urlencode({"next": request.get_full_path()})
+    try:
+        url = resolve_url(settings.LOGIN_URL)
+        resolve(url)
+        return f"{url}?{query}"
+    except (NoReverseMatch, Resolver404):
+        pass
+    try:
+        return f"{reverse('admin:login')}?{query}"
+    except NoReverseMatch:
+        return None
 
 
 class TracerAccessMixin:
@@ -44,14 +64,17 @@ class TracerAccessMixin:
             return _error("Internal error; see server logs.", status=500)
 
     def handle_no_access(self, request):
-        return _error("Permission Tracer is restricted to staff users.", status=403)
+        return _error(ACCESS_DENIED_MESSAGE, status=403)
 
 
 class PermissionTracerIndexView(TracerAccessMixin, View):
     def handle_no_access(self, request):
-        if not request.user.is_authenticated:
-            return redirect_to_login(request.get_full_path())
-        return HttpResponseForbidden("Permission Tracer is restricted to staff users.")
+        return render(
+            request,
+            "permission_tracer/access_denied.html",
+            {"user": request.user, "login_url": _login_url(request)},
+            status=403,
+        )
 
     def get(self, request):
         return render(

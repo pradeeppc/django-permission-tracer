@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Permission Tracer: access restricted</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            margin: 0;
+            padding: 3rem 1rem;
+        }
+        .card {
+            max-width: 640px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+        }
+        h1 { color: #667eea; font-size: 1.5rem; margin-top: 0; }
+        h2 { font-size: 1rem; margin-top: 1.5rem; }
+        pre {
+            background: #f5f5f5;
+            border-radius: 4px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-size: 0.85rem;
+        }
+        code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+        .button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+        .muted { color: #666; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Permission Tracer is restricted</h1>
+        {% if user.is_authenticated %}
+            <p>You are logged in as <strong>{{ user.get_username }}</strong>, but by default only
+            active <strong>staff users</strong> can open Permission Tracer.</p>
+        {% else %}
+            <p>By default only logged-in <strong>staff users</strong> can open Permission Tracer,
+            because it shows your permission code and recent requests.</p>
+            {% if login_url %}
+                <p><a class="button" href="{{ login_url }}">Log in</a></p>
+            {% endif %}
+        {% endif %}
+
+        <h2>Who can access it is configurable</h2>
+        <p>Set <code>ACCESS_CHECK</code> in your <code>settings.py</code>, for example to allow
+        anyone while <code>DEBUG = True</code>:</p>
+        <pre><code>PERMISSION_TRACER = {
+    "ACCESS_CHECK": "permission_tracer.conf.allow_in_debug",
+}</code></pre>
+        <p>It also accepts any function that takes the request and returns <code>True</code> or
+        <code>False</code>, e.g. <code>lambda request: request.user.is_superuser</code>.</p>
+        <p class="muted">Avoid opening it to everyone on a shared or public server.</p>
+    </div>
+</body>
+</html>

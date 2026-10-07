@@ -58,6 +58,15 @@ open `http://localhost:8000/_permission-tracer/`. You can mount it at any prefix
 > **Safe by default:** the tracer is only enabled when `DEBUG = True`, and the dashboard and API are
 > restricted to active staff users. It shows your permission classes' source code and recent requests,
 > so keep it that way in any shared environment.
+>
+> To change who can open it, set `ACCESS_CHECK`. For local development, this lets anyone in while
+> `DEBUG = True`:
+>
+> ```python
+> PERMISSION_TRACER = {"ACCESS_CHECK": "permission_tracer.conf.allow_in_debug"}
+> ```
+>
+> See [Configuration](#configuration) for all options.
 
 ## Usage
 

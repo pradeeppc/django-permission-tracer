@@ -17,10 +17,30 @@ def test_anonymous_and_non_staff_are_refused(client, django_user_model, url):
     assert client.get(url).status_code == 403
 
 
-def test_index_redirects_anonymous_to_login(client):
+def test_index_explains_access_check_to_anonymous(client):
     response = client.get("/devtools/permissions/")
-    assert response.status_code == 302
-    assert "login" in response["Location"]
+    assert response.status_code == 403
+    html = response.content.decode()
+    assert "ACCESS_CHECK" in html
+    assert "permission_tracer.conf.allow_in_debug" in html
+    assert "Log in" not in html  # the test project has no login page
+
+
+def test_index_links_to_login_page_when_one_exists(client, settings):
+    settings.ROOT_URLCONF = "tests.urls_with_login"
+    html = client.get("/devtools/permissions/").content.decode()
+    assert 'href="/accounts/login/?next=%2Fdevtools%2Fpermissions%2F"' in html
+
+
+def test_index_tells_non_staff_who_they_are(client, django_user_model):
+    client.force_login(django_user_model.objects.create_user("joe", password="pw"))
+    response = client.get("/devtools/permissions/")
+    assert response.status_code == 403
+    assert "joe" in response.content.decode()
+
+
+def test_api_403_names_the_setting(client):
+    assert "ACCESS_CHECK" in client.get(API).json()["message"]
 
 
 def test_index_uses_mount_prefix(staff_client):
