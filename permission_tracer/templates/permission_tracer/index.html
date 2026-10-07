@@ -132,10 +132,67 @@
         
         .graph-container {
             width: 100%;
-            height: 600px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             background: white;
+        }
+
+        .graph-layout { display: flex; height: 640px; }
+        .graph-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            overflow-y: auto;
+            border-right: 1px solid #eee;
+            padding: 0.75rem;
+            box-sizing: border-box;
+        }
+        #graph-filter {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            font: inherit;
+        }
+        .graph-picker-title { font-size: 0.8rem; color: #888; margin: 0.75rem 0 0.25rem; text-transform: uppercase; }
+        .graph-pick {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            width: 100%;
+            text-align: left;
+            border: none;
+            background: none;
+            padding: 0.4rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.9rem;
+            color: #333;
+        }
+        .graph-pick:hover { background: #f0f2ff; }
+        .graph-pick.active { background: #e3e7ff; font-weight: 600; }
+        .graph-pick .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .graph-pick .count { flex-shrink: 0; color: #888; font-weight: 400; }
+        .graph-pick code { font-size: 0.8rem; }
+        .badge-open { padding: 0 0.4rem; background: #ef6c00; color: white; border-radius: 8px; font-size: 0.7rem; font-weight: 400; }
+        .graph-empty, .graph-hint { color: #999; font-size: 0.85rem; padding: 0.4rem 0.5rem; }
+        .graph-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .graph-heading { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #444; }
+        .graph-heading-text { margin: 0.25rem 0; }
+        .graph-warning { color: #ef6c00; }
+        .graph-back { border: 1px solid #ddd; background: white; border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer; font: inherit; font-size: 0.85rem; }
+        .graph-legend { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.75rem; color: #666; margin-top: 0.4rem; }
+        .graph-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 0.3rem; vertical-align: middle; }
+        .graph-canvas { flex: 1; overflow: auto; padding: 0.5rem; }
+        .graph-canvas .clickable { cursor: pointer; }
+        .graph-canvas .clickable:hover rect.row-bg { fill: #f0f2ff; }
+        .graph-canvas .clickable:hover > rect { stroke-width: 2.5; }
+        @media (max-width: 760px) {
+            .graph-layout { flex-direction: column; height: auto; }
+            .graph-sidebar { width: auto; max-height: 240px; border-right: none; border-bottom: 1px solid #eee; }
+            .graph-canvas { max-height: 560px; }
         }
         
         .stats {
@@ -425,111 +482,245 @@
             });
         }
 
+        const METHOD_COLORS = { GET: '#2e7d32', POST: '#1565c0', PUT: '#ef6c00', PATCH: '#8e24aa', DELETE: '#c62828' };
+        const SVG_FONT = "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        let graphFocus = null;
+        let graphHistory = [];
+
+        function methodColor(method) {
+            return METHOD_COLORS[method] || '#607d8b';
+        }
+
+        function shortName(name) {
+            return name.split('.').pop();
+        }
+
+        function truncate(text, max) {
+            return text.length > max ? text.slice(0, max - 1) + '…' : text;
+        }
+
+        function findEndpoint(path) {
+            return Object.values(analysisData.endpoint_permissions || {}).find(info => info.path === path);
+        }
+
+        function sortedPermissionNames() {
+            const usage = analysisData.permission_endpoints || {};
+            return Object.keys(usage).sort((a, b) => usage[b].length - usage[a].length || a.localeCompare(b));
+        }
+
         async function loadGraph() {
             const container = document.getElementById('graph-container');
-            container.innerHTML = '<div class="loading">Loading graph...</div>';
+            if (!analysisData) {
+                container.innerHTML = '<div class="loading">Loading graph...</div>';
+                await loadOverview();
+            }
+            if (!analysisData) {
+                container.innerHTML = '<div class="error">Could not load permission data.</div>';
+                return;
+            }
+            const permissions = sortedPermissionNames();
+            if (permissions.length === 0) {
+                container.innerHTML = '<div class="loading">No permissions found. Make sure your views have permission_classes defined.</div>';
+                return;
+            }
+            if (!graphFocus) {
+                graphFocus = { type: 'permission', id: permissions[0] };
+            }
 
-            try {
-                const response = await fetch(BASE_URL + 'api/graph/');
-
-                if (!response.ok) {
-                    const text = await response.text();
-                    container.innerHTML = `<div class="error">API Error (${response.status}): ${escapeHtml(text.substring(0, 200))}</div>`;
+            container.innerHTML = `
+                <div class="graph-layout">
+                    <aside class="graph-sidebar">
+                        <input id="graph-filter" type="search" placeholder="Filter permissions or endpoints" aria-label="Filter permissions or endpoints">
+                        <div id="graph-picker"></div>
+                    </aside>
+                    <div class="graph-main">
+                        <div id="graph-heading" class="graph-heading"></div>
+                        <div id="graph-canvas" class="graph-canvas"></div>
+                    </div>
+                </div>`;
+            const filter = document.getElementById('graph-filter');
+            filter.addEventListener('input', () => renderGraphPicker(filter.value));
+            container.onclick = (event) => {
+                if (event.target.closest('[data-graph-back]')) {
+                    const previous = graphHistory.pop();
+                    if (previous) setGraphFocus(previous.type, previous.id, true);
                     return;
                 }
+                const target = event.target.closest('[data-focus-type]');
+                if (target) setGraphFocus(target.dataset.focusType, target.dataset.focusId);
+            };
+            renderGraphPicker('');
+            drawGraphFocus();
+        }
 
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    container.innerHTML = `<div class="error">API returned non-JSON. Response: ${escapeHtml(text.substring(0, 200))}</div>`;
-                    return;
-                }
+        function renderGraphPicker(query) {
+            const q = query.trim().toLowerCase();
+            const usage = analysisData.permission_endpoints;
+            const permissions = sortedPermissionNames().filter(name => !q || name.toLowerCase().includes(q));
+            const endpoints = q
+                ? Object.values(analysisData.endpoint_permissions).filter(info => info.path.toLowerCase().includes(q)).slice(0, 50)
+                : [];
+            const item = (type, id, label, extra) => {
+                const active = graphFocus && graphFocus.type === type && graphFocus.id === id;
+                return `<button type="button" class="graph-pick${active ? ' active' : ''}" data-focus-type="${type}" data-focus-id="${escapeHtml(id)}" title="${escapeHtml(id)}"><span class="name">${label}</span>${extra}</button>`;
+            };
 
-                const result = await response.json();
+            let html = `<div class="graph-picker-title">Permissions (${permissions.length})</div>`;
+            html += permissions.map(name => item(
+                'permission', name,
+                escapeHtml(shortName(name)) + (isAllowAny(name) ? ' <span class="badge-open">open</span>' : ''),
+                `<span class="count">${usage[name].length}</span>`
+            )).join('') || '<div class="graph-empty">No matches</div>';
+            if (q) {
+                html += `<div class="graph-picker-title">Endpoints (${endpoints.length})</div>`;
+                html += endpoints.map(info => item('endpoint', info.path, `<code>${escapeHtml(truncate(info.path, 38))}</code>`, '')).join('')
+                    || '<div class="graph-empty">No matches</div>';
+            } else {
+                html += '<div class="graph-hint">Type to search endpoints too.</div>';
+            }
+            document.getElementById('graph-picker').innerHTML = html;
+        }
 
-                if (result.status === 'success') {
-                    renderGraph(result.data);
-                } else {
-                    container.innerHTML = `<div class="error">Error: ${escapeHtml(result.message || 'Unknown error')}</div>`;
-                }
-            } catch (error) {
-                console.error('Error loading graph:', error);
-                container.innerHTML = `<div class="error">Error loading graph: ${escapeHtml(error.message)}</div>`;
+        function setGraphFocus(type, id, fromBack) {
+            if (!fromBack && graphFocus && !(graphFocus.type === type && graphFocus.id === id)) {
+                graphHistory.push(graphFocus);
+            }
+            graphFocus = { type, id };
+            const filter = document.getElementById('graph-filter');
+            renderGraphPicker(filter ? filter.value : '');
+            drawGraphFocus();
+            document.getElementById('graph-canvas').scrollTop = 0;
+        }
+
+        function drawGraphFocus() {
+            if (graphFocus.type === 'endpoint') {
+                drawEndpointGraph(graphFocus.id);
+            } else {
+                drawPermissionGraph(graphFocus.id);
             }
         }
 
-        function renderGraph(graphData) {
-            const container = document.getElementById('graph-container');
+        function setGraphHeading(html) {
+            const back = graphHistory.length ? '<button type="button" class="graph-back" data-graph-back>&larr; Back</button>' : '';
+            const legend = '<div class="graph-legend">' + Object.keys(METHOD_COLORS).map(m =>
+                `<span><i style="background: ${METHOD_COLORS[m]}"></i>${m}</span>`).join('') + '</div>';
+            document.getElementById('graph-heading').innerHTML = back + `<div class="graph-heading-text">${html}</div>` + legend;
+        }
 
-            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
-                container.innerHTML = '<div class="loading">No graph data available. Make sure you have endpoints with permissions defined.</div>';
+        function svgText(x, y, text, opts = {}) {
+            const attrs = [
+                `x="${x}"`, `y="${y}"`, `font-size="${opts.size || 13}"`, `fill="${opts.color || '#333'}"`,
+                opts.weight ? `font-weight="${opts.weight}"` : '',
+                opts.mono ? 'font-family="SFMono-Regular, Consolas, Liberation Mono, monospace"' : '',
+                opts.anchor ? `text-anchor="${opts.anchor}"` : '',
+            ].filter(Boolean).join(' ');
+            return `<text ${attrs}>${escapeHtml(text)}</text>`;
+        }
+
+        function svgEdge(x1, y1, x2, y2, color) {
+            const mx = (x1 + x2) / 2;
+            return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.6"/>`;
+        }
+
+        function svgNode(x, y, w, h, title, subtitle, opts = {}) {
+            const open = opts.focus ? ` class="clickable" data-focus-type="${opts.focus.type}" data-focus-id="${escapeHtml(opts.focus.id)}"` : '';
+            return `<g${open}>
+                ${opts.tooltip ? `<title>${escapeHtml(opts.tooltip)}</title>` : ''}
+                <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${opts.fill || '#e3e7ff'}" stroke="${opts.stroke || '#667eea'}" stroke-width="1.5"/>
+                ${svgText(x + 12, subtitle ? y + 22 : y + h / 2 + 5, title, { weight: 600, size: 14 })}
+                ${subtitle ? svgText(x + 12, y + 40, subtitle, { size: 11, color: '#666', mono: true }) : ''}
+            </g>`;
+        }
+
+        function methodBadge(x, y, method) {
+            return `<rect x="${x}" y="${y}" width="52" height="18" rx="9" fill="${methodColor(method)}"/>`
+                + svgText(x + 26, y + 13, method, { size: 10, color: '#fff', weight: 600, anchor: 'middle' });
+        }
+
+        function svgWrap(width, height, body) {
+            return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="${SVG_FONT}" role="img">${body}</svg>`;
+        }
+
+        function permissionColors(name) {
+            return isAllowAny(name) ? { fill: '#fff3e0', stroke: '#ef6c00' } : { fill: '#e3e7ff', stroke: '#667eea' };
+        }
+
+        function drawPermissionGraph(name) {
+            const usages = (analysisData.permission_endpoints[name] || []).slice().sort((a, b) => a.path.localeCompare(b.path));
+            const ROW = 30, TOP = 20, RIGHT_X = 380;
+            const height = Math.max(TOP * 2 + usages.length * ROW, 120);
+            const node = { x: 20, y: TOP, w: 300, h: 56 };
+
+            let body = svgNode(node.x, node.y, node.w, node.h, shortName(name), truncate(name, 44),
+                { ...permissionColors(name), tooltip: name });
+            let width = 900;
+            usages.forEach((usage, i) => {
+                const y = TOP + i * ROW + ROW / 2;
+                const methods = usage.methods.length ? usage.methods : ['ANY'];
+                body += svgEdge(node.x + node.w, node.y + node.h / 2, RIGHT_X - 6, y,
+                    methods.length === 1 ? methodColor(methods[0]) : '#9e9e9e');
+                let row = `<rect class="row-bg" x="${RIGHT_X - 4}" y="${y - ROW / 2 + 2}" width="2000" height="${ROW - 4}" rx="4" fill="transparent"/>`;
+                methods.forEach((method, k) => { row += methodBadge(RIGHT_X + k * 56, y - 9, method); });
+                const textX = RIGHT_X + methods.length * 56 + 6;
+                row += svgText(textX, y + 4, usage.path, { mono: true, size: 12 });
+                width = Math.max(width, textX + usage.path.length * 7.3 + 20);
+                body += `<g class="clickable" data-focus-type="endpoint" data-focus-id="${escapeHtml(usage.path)}">`
+                    + `<title>${escapeHtml(usage.path + '\n' + usage.view_class + '\nClick to see every permission on this endpoint')}</title>${row}</g>`;
+            });
+
+            const note = isAllowAny(name)
+                ? ' <span class="graph-warning">AllowAny lets every request through, so DRF does not restrict these endpoints.</span>'
+                : '';
+            setGraphHeading(`<strong>${escapeHtml(shortName(name))}</strong> is checked on ${usages.length} endpoint(s). Click an endpoint to see all of its permissions.${note}`);
+            document.getElementById('graph-canvas').innerHTML = svgWrap(Math.ceil(width), height, body);
+        }
+
+        function drawEndpointGraph(path) {
+            const info = findEndpoint(path);
+            if (!info) {
+                setGraphHeading('Endpoint not found.');
+                document.getElementById('graph-canvas').innerHTML = '';
                 return;
             }
+            const groups = Object.entries(info.methods).map(([method, detail]) => ({
+                method, detail, perms: detail.permissions.length ? detail.permissions : [null],
+            }));
+            const ROW = 48, GAP = 14, TOP = 20, MX = 390, MW = 190, PX = 650, PW = 400;
+            const rows = groups.reduce((n, g) => n + g.perms.length, 0);
+            const height = Math.max(TOP * 2 + rows * ROW + Math.max(groups.length - 1, 0) * GAP, 140);
+            const endpoint = { x: 20, y: TOP, w: 310, h: 56 };
 
-            const permissionNodes = graphData.nodes.filter(n => n.type === 'permission');
-            const endpointNodes = graphData.nodes.filter(n => n.type === 'endpoint');
-            const nodeById = Object.fromEntries(graphData.nodes.map(n => [n.id, n]));
-
-            if (permissionNodes.length === 0 && endpointNodes.length === 0) {
-                container.innerHTML = '<div class="loading">No permissions or endpoints found in graph data.</div>';
-                return;
-            }
-
-            let html = '<div style="padding: 1.5rem; max-height: 550px; overflow-y: auto;">';
-
-            if (permissionNodes.length > 0) {
-                const sortedPermissions = permissionNodes.sort((a, b) => {
-                    const aCount = a.edge_count !== undefined ? a.edge_count : graphData.edges.filter(e => e.from === a.id).length;
-                    const bCount = b.edge_count !== undefined ? b.edge_count : graphData.edges.filter(e => e.from === b.id).length;
-                    return bCount - aCount;
+            let body = svgNode(endpoint.x, endpoint.y, endpoint.w, endpoint.h, truncate(info.path, 34), truncate(shortName(info.view_class), 42),
+                { fill: '#f5f5f5', stroke: '#9e9e9e', tooltip: info.path + '\n' + info.view_class });
+            let y = TOP;
+            groups.forEach(group => {
+                const groupHeight = group.perms.length * ROW;
+                const my = y + groupHeight / 2;
+                const color = methodColor(group.method);
+                const anonymous = group.detail.anonymous_allowed === true;
+                body += svgEdge(endpoint.x + endpoint.w, endpoint.y + endpoint.h / 2, MX, my, color);
+                body += `<g><title>${escapeHtml(group.detail.expression + (anonymous ? '\nAn anonymous request passes these checks' : ''))}</title>
+                    <rect x="${MX}" y="${my - 20}" width="${MW}" height="40" rx="6" fill="#fff" stroke="${anonymous ? '#ef6c00' : color}" stroke-width="1.5"${anonymous ? ' stroke-dasharray="5 3"' : ''}/>
+                    ${methodBadge(MX + 10, my - 9, group.method)}
+                    ${svgText(MX + 72, my + 4, truncate(group.detail.action || '', 16), { size: 12, color: '#555', mono: true })}
+                </g>`;
+                group.perms.forEach((perm, i) => {
+                    const py = y + i * ROW + ROW / 2;
+                    body += svgEdge(MX + MW, my, PX, py, color);
+                    body += perm === null
+                        ? svgNode(PX, py - 18, PW, 36, 'No permission classes', null, { fill: '#fff3e0', stroke: '#ef6c00' })
+                        : svgNode(PX, py - 18, PW, 36, truncate(shortName(perm), 44), null, {
+                            ...permissionColors(perm),
+                            tooltip: perm + '\nClick to see every endpoint using it',
+                            focus: { type: 'permission', id: perm },
+                        });
                 });
+                y += groupHeight + GAP;
+            });
 
-                html += '<h4 style="margin-bottom: 1rem; color: #667eea;">Permissions (' + permissionNodes.length + ')</h4>';
-                sortedPermissions.forEach(node => {
-                    const connectedEndpoints = node.edge_count !== undefined ? node.edge_count : graphData.edges.filter(e => e.from === node.id).length;
-                    const fullName = node.full_name || node.label;
-                    const open = isAllowAny(fullName);
-                    html += `
-                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: ${open ? '#fff3e0' : '#e3f2fd'}; border-left: 4px solid ${open ? '#ef6c00' : '#667eea'}; border-radius: 4px;">
-                            <strong>${escapeHtml(node.label)}</strong>
-                            ${open ? '<span style="margin-left: 0.5rem; padding: 0.1rem 0.5rem; background: #ef6c00; color: white; border-radius: 10px; font-size: 0.75rem;">no restriction</span>' : ''}
-                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
-                                Connected to ${connectedEndpoints} endpoint(s)
-                            </div>
-                            ${fullName !== node.label ? `<div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem; font-family: monospace;">${escapeHtml(fullName)}</div>` : ''}
-                        </div>
-                    `;
-                });
-            }
-
-            if (endpointNodes.length > 0) {
-                html += '<h4 style="margin-top: 2rem; margin-bottom: 1rem; color: #667eea;">Endpoints (' + endpointNodes.length + ')</h4>';
-                endpointNodes.slice(0, 20).forEach(node => {
-                    const permNames = graphData.edges
-                        .filter(e => e.to === node.id)
-                        .map(e => (nodeById[e.from] || {}).full_name || '');
-                    const open = permNames.length === 0 || permNames.every(isAllowAny);
-                    const summary = permNames.length === 0
-                        ? 'No permission classes'
-                        : open
-                            ? 'Open to everyone (AllowAny)'
-                            : `Checked by ${permNames.length} permission(s)`;
-                    html += `
-                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #f5f5f5; border-left: 4px solid ${open ? '#ef6c00' : '#4caf50'}; border-radius: 4px;">
-                            <strong>${escapeHtml(node.label)}</strong>
-                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
-                                ${summary}
-                            </div>
-                        </div>
-                    `;
-                });
-                if (endpointNodes.length > 20) {
-                    html += `<div style="margin-top: 0.5rem; color: #666; font-style: italic;">... and ${endpointNodes.length - 20} more endpoints</div>`;
-                }
-            }
-
-            html += '</div>';
-            container.innerHTML = html;
+            const dynamic = info.dynamic ? ' This view overrides <code>get_permissions()</code>; results are for an anonymous request.' : '';
+            setGraphHeading(`<code>${escapeHtml(info.path)}</code> &middot; ${escapeHtml(info.view_class)}. Click a permission to see where else it is used. A dashed method box means an anonymous request passes.${dynamic}`);
+            document.getElementById('graph-canvas').innerHTML = svgWrap(PX + PW + 20, height, body);
         }
 
         async function loadTraces() {
