@@ -15,12 +15,12 @@ Add to `settings.py`:
 ```python
 INSTALLED_APPS = [
     # ... your apps
-    'permission_tracer',
+    "permission_tracer",
 ]
 
 MIDDLEWARE = [
     # ... your middleware
-    'permission_tracer.middleware.PermissionTracerMiddleware',
+    "permission_tracer.middleware.PermissionTracerMiddleware",
 ]
 ```
 
@@ -29,11 +29,13 @@ Add to `urls.py`:
 ```python
 urlpatterns = [
     # ... your URLs
-    path('_permission-tracer/', include('permission_tracer.urls')),
+    path("_permission-tracer/", include("permission_tracer.urls")),
 ]
 ```
 
 ## 3. Run Server
+
+With `DEBUG = True` (the tracer is off otherwise):
 
 ```bash
 python manage.py runserver
@@ -41,7 +43,7 @@ python manage.py runserver
 
 ## 4. Open Browser
 
-Visit: `http://localhost:8000/_permission-tracer/`
+Log in as a staff user (for example via `/admin/`), then visit `http://localhost:8000/_permission-tracer/`
 
 ## 5. Analyze Your Permissions
 
@@ -82,5 +84,11 @@ You now have:
 ### Debug a denied request:
 1. Make the request
 2. Go to "Trace" tab
-3. See which permissions were checked and why it failed
+3. See which permissions were checked, which one denied the request and, for `A | B` style
+   permissions, which part failed
+
+### Stop accidentally-public endpoints in CI:
+```bash
+python manage.py permission_tracer_analyze --fail-on-unprotected --allow '/api/public/*'
+```
 

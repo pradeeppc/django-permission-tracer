@@ -1,8 +1,4 @@
-include README.md
-include LICENSE
-include pyproject.toml
+include CHANGELOG.md LICENSE README.md
 recursive-include permission_tracer/templates *
-recursive-include permission_tracer/static *
-recursive-exclude * __pycache__
-recursive-exclude * *.py[co]
-
+recursive-include tests *.py
+global-exclude __pycache__ *.py[co]

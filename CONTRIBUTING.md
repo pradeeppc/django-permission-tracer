@@ -19,49 +19,40 @@ Thank you for your interest in contributing! This document provides guidelines a
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-4. Install development dependencies:
+4. Install the package with development dependencies:
    ```bash
-   pip install -r requirements-dev.txt
-   pip install -e .
+   pip install -e ".[dev]"
    ```
 
-## Development Setup
+## Running Tests
 
-1. Create a test Django project to develop against:
-   ```bash
-   django-admin startproject test_project
-   cd test_project
-   ```
+The test suite includes a small Django project (`tests/`), so no separate project is needed:
 
-2. Add `permission_tracer` to `INSTALLED_APPS` and configure as per installation guide
-
-3. Run tests:
-   ```bash
-   pytest
-   ```
+```bash
+pytest
+```
 
 ## Code Style
 
-- Follow PEP 8 style guidelines
-- Use Black for code formatting: `black .`
-- Use isort for import sorting: `isort .`
-- Maximum line length: 100 characters
+Code is formatted and linted with [Ruff](https://docs.astral.sh/ruff/) (configured in `pyproject.toml`):
 
-## Testing
+```bash
+ruff format .
+ruff check --fix .
+```
 
-- Write tests for new features
-- Ensure all tests pass: `pytest`
-- Aim for good test coverage
+CI runs both, plus the test suite on every supported Python/Django/DRF combination.
 
 ## Submitting Changes
 
 1. Create a feature branch: `git checkout -b feature/your-feature-name`
 2. Make your changes
 3. Write or update tests
-4. Ensure tests pass and code is formatted
-5. Commit your changes: `git commit -m "Add feature: description"`
-6. Push to your fork: `git push origin feature/your-feature-name`
-7. Create a Pull Request
+4. Ensure tests pass and `ruff check` / `ruff format --check` are clean
+5. Add an entry to `CHANGELOG.md`
+6. Commit your changes: `git commit -m "Add feature: description"`
+7. Push to your fork: `git push origin feature/your-feature-name`
+8. Create a Pull Request
 
 ## Pull Request Guidelines
 
@@ -69,6 +60,12 @@ Thank you for your interest in contributing! This document provides guidelines a
 - Reference any related issues
 - Ensure all tests pass
 - Update documentation if needed
+
+## Releasing
+
+1. Update `__version__` in `permission_tracer/__init__.py` and the `CHANGELOG.md` entry
+2. Commit, then create a GitHub release with a `vX.Y.Z` tag
+3. The `publish` workflow builds the package and uploads it to PyPI
 
 ## Reporting Issues
 

@@ -2,22 +2,22 @@
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Django 3.2 or higher
-- Django REST Framework 3.12 or higher (optional, but recommended)
+- Python 3.9 or higher
+- Django 4.2 or higher
+- Django REST Framework 3.14 or higher (optional, but recommended)
 
 ## Installation Steps
 
 ### 1. Install the Package
 
 ```bash
-pip install django-permission-tracer
+pip install "django-permission-tracer[drf]"
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/django-permission-tracer.git
+git clone https://github.com/pradeeppc/django-permission-tracer.git
 cd django-permission-tracer
 pip install -e .
 ```
@@ -28,10 +28,10 @@ Add `permission_tracer` to your `INSTALLED_APPS` in `settings.py`:
 
 ```python
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
+    "django.contrib.admin",
+    "django.contrib.auth",
     # ... your other apps
-    'permission_tracer',
+    "permission_tracer",
 ]
 ```
 
@@ -41,9 +41,9 @@ Add the middleware to your `MIDDLEWARE` list. It should be near the top, but aft
 
 ```python
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'permission_tracer.middleware.PermissionTracerMiddleware',  # Add this
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "permission_tracer.middleware.PermissionTracerMiddleware",  # Add this
+    "django.contrib.sessions.middleware.SessionMiddleware",
     # ... your other middleware
 ]
 ```
@@ -57,7 +57,7 @@ from django.urls import path, include
 
 urlpatterns = [
     # ... your other URL patterns
-    path('_permission-tracer/', include('permission_tracer.urls')),
+    path("_permission-tracer/", include("permission_tracer.urls")),
 ]
 ```
 
@@ -65,31 +65,22 @@ urlpatterns = [
 
 ### 5. Configure Settings (Optional)
 
-Add configuration to your `settings.py`:
+The defaults are safe: tracing is on only when `DEBUG = True`, and only active staff users can open
+the dashboard. To change that, see the Configuration section of the [README](README.md#configuration):
 
 ```python
 PERMISSION_TRACER = {
-    'ENABLED': True,  # Set to False to disable tracing
-    'STORAGE_BACKEND': 'memory',  # 'memory', 'database', or 'cache'
-    'MAX_TRACES': 100,  # Maximum number of traces to keep
-    'EXCLUDE_PATHS': [
-        '/_permission-tracer/',
-        '/admin/',
-        '/static/',
-        '/media/',
-    ],  # Paths to exclude from tracing
+    "ENABLED": None,  # None follows settings.DEBUG
+    "ACCESS_CHECK": "permission_tracer.conf.staff_only",
+    "STORAGE_BACKEND": "memory",  # or 'cache' to share traces between workers
+    "MAX_TRACES": 100,
+    "EXCLUDE_PATHS": ["/admin/", "/static/", "/media/"],
 }
 ```
 
-### 6. Run Migrations (Optional)
+No migrations are needed; the tracer has no database models.
 
-If you plan to use database storage:
-
-```bash
-python manage.py migrate permission_tracer
-```
-
-### 7. Test Installation
+### 6. Test Installation
 
 Start your Django development server:
 
@@ -97,7 +88,7 @@ Start your Django development server:
 python manage.py runserver
 ```
 
-Visit `http://localhost:8000/_permission-tracer/` in your browser. You should see the Permission Tracer interface.
+Log in as a staff user (for example via `/admin/`), then visit `http://localhost:8000/_permission-tracer/`.
 
 ## Verify Installation
 
@@ -113,6 +104,7 @@ This should output information about your permissions and endpoints.
 
 ### Permission Tracer page shows 404
 
+- The tracer is disabled when `DEBUG = False` unless you set `PERMISSION_TRACER['ENABLED'] = True`
 - Make sure you've added the URLs correctly
 - Check that `permission_tracer` is in `INSTALLED_APPS`
 - Verify the URL path matches what you configured
@@ -120,7 +112,13 @@ This should output information about your permissions and endpoints.
 ### No permissions are being traced
 
 - Ensure the middleware is added and enabled
-- Check that `PERMISSION_TRACER['ENABLED']` is `True`
+- Check that `DEBUG = True`, or that `PERMISSION_TRACER['ENABLED']` is `True`
+- Restart the server after changing `ENABLED`; tracing is installed at startup
+- Views that override `check_permissions()` themselves are not traced
+
+### Permission Tracer returns 403
+
+- Only active staff users can use it by default. Log in as staff, or set `ACCESS_CHECK`
 - Verify your views are using permission classes
 
 ### Analysis command shows no results

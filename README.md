@@ -1,111 +1,150 @@
 # Django Permission Tracer
 
-🔍 **Trace and visualize Django permissions** - See which permissions protect your APIs and discover where permissions are used across your codebase.
+🔍 **See which permissions protect each API, and find out why a request was denied.**
 
-A plug-and-play Django library that helps developers understand complex permission structures in Django REST Framework applications through static analysis and runtime tracing.
+Django REST Framework permissions are spread across `permission_classes`, `@action(...)` overrides,
+`get_permissions()` methods, composed expressions like `IsAuthenticated | IsOwner`, and global
+defaults. Permission Tracer resolves all of that for you, both statically (for every endpoint and
+HTTP method) and at runtime (for each request).
 
 ## Features
 
-- 🎯 **Permission Discovery**: See which permissions protect each API endpoint
-- 🔄 **Reverse Lookup**: Find all endpoints using a specific permission
-- 📊 **Visualization**: Interactive graph showing permission-to-API mappings
-- 🐛 **Permission Debugging**: Trace why a request was denied
-- 📝 **Auto-Documentation**: Generate permission documentation automatically
-- 🔌 **Plug & Play**: Easy integration with any Django project
+- 🎯 **Endpoint → permissions, per HTTP method and viewset action**, including `@action` overrides,
+  `get_permissions()` overrides and composed permissions (`&`, `|`, `~`)
+- 🔄 **Permission → endpoints** reverse lookup
+- 🐛 **"Why was I denied?"**: for each request, every permission's result, which one denied it, and for
+  composed permissions which operand failed. Covers both `has_permission` and `has_object_permission`
+- 🚪 **Anonymous-access audit**: flags endpoints an unauthenticated user can reach; use it in CI with
+  `--fail-on-unprotected`
+- 📝 **Permission matrix export** as Markdown or CSV, for docs, PRs and security reviews
+- 📊 Web dashboard with search and a graph view
+
+## Screenshot
+
+<img width="1877" height="594" alt="Permission Tracer dashboard" src="https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24" />
 
 ## Quickstart
 
-### Installation
-
 ```bash
-pip install django-permission-tracer
+pip install "django-permission-tracer[drf]"
 ```
 
-### Setup
-
-1. Add `permission_tracer` to your `INSTALLED_APPS`:
-
 ```python
+# settings.py
 INSTALLED_APPS = [
-    # ... your other apps
-    'permission_tracer',
+    # ...
+    "permission_tracer",
 ]
-```
 
-2. Add the middleware to your `MIDDLEWARE` (should be near the top):
-
-```python
 MIDDLEWARE = [
-    'permission_tracer.middleware.PermissionTracerMiddleware',
-    # ... your other middleware
+    # ...
+    "permission_tracer.middleware.PermissionTracerMiddleware",
 ]
 ```
-
-3. Include the permission tracer URLs in your main `urls.py`:
 
 ```python
-from django.urls import path, include
-
+# urls.py
 urlpatterns = [
-    # ... your other URLs
-    path('_permission-tracer/', include('permission_tracer.urls')),
+    # ...
+    path("_permission-tracer/", include("permission_tracer.urls")),
 ]
 ```
 
-4. Run migrations (if using database storage):
+Run the dev server (`DEBUG = True`), log in as a **staff** user (for example through `/admin/`) and
+open `http://localhost:8000/_permission-tracer/`. You can mount it at any prefix you like.
 
-```bash
-python manage.py migrate permission_tracer
-```
-
-5. Start your Django server and visit `http://localhost:8000/_permission-tracer/` 🚀
+> **Safe by default:** the tracer is only enabled when `DEBUG = True`, and the dashboard and API are
+> restricted to active staff users. It shows your permission classes' source code and recent requests,
+> so keep it that way in any shared environment.
 
 ## Usage
 
-### View Permission Mappings
+### Debug a denied request
 
-Navigate to `/_permission-tracer/` to see:
-- **API Explorer**: Browse all your APIs and their associated permissions
-- **Permission Explorer**: See where each permission is used
-- **Graph View**: Visual representation of permission-to-API relationships
+Make the request, then open the **Traces** tab (or `GET <prefix>/api/trace/?denied=1`). Each trace shows:
 
-### Trace a Request
+- the view, viewset action and user (and which authenticator authenticated them)
+- every permission check, at view level and object level, and whether it passed
+- the permission that denied the request, with DRF's error message
+- for composed permissions, which operand failed, e.g. `✗ OR → ✗ IsAuthenticated, ✗ IsOwner`
 
-1. Make a request to any API endpoint
-2. Go to `/_permission-tracer/trace/` to see the latest traced request
-3. View which permissions were checked and their results
-
-### Static Analysis
-
-Run the management command to analyze your codebase:
+### Permission report and matrix
 
 ```bash
-python manage.py permission_tracer_analyze
+python manage.py permission_tracer_analyze                     # readable report
+python manage.py permission_tracer_analyze --format markdown   # matrix for docs / PR descriptions
+python manage.py permission_tracer_analyze --format csv --output permissions.csv
+python manage.py permission_tracer_analyze --format json
 ```
 
-This will discover all permission classes and their mappings to endpoints.
+Example Markdown output:
+
+| Method | Path | Action | Permissions | Anonymous |
+|---|---|---|---|---|
+| GET | `/api/articles/` | list | `IsAuthenticated \| IsOwner` | no |
+| GET | `/api/articles/public/` | public | `AllowAny` | yes |
+| POST | `/api/articles/{pk}/publish/` | publish | `IsAdminUser` | no |
+
+"Anonymous" is worked out by calling each permission with an unauthenticated request: `yes`, `no`,
+or `?` if a permission raised an error.
+
+### Fail CI when an endpoint is accidentally public
+
+```bash
+python manage.py permission_tracer_analyze --format markdown \
+    --fail-on-unprotected \
+    --allow /api/ \
+    --allow '/api/auth/*' \
+    --allow 'GET /api/articles/*'
+```
+
+The command exits non-zero and lists every endpoint method that anonymous users can reach, except
+those matching an `--allow` pattern (a glob, optionally prefixed with an HTTP method).
 
 ## Configuration
 
-Add to your `settings.py`:
+All settings are optional:
 
 ```python
 PERMISSION_TRACER = {
-    'ENABLED': True,  # Set to False to disable tracing
-    'STORAGE_BACKEND': 'memory',  # 'memory' or 'database'
-    'MAX_TRACES': 100,  # Maximum number of traces to keep in memory
-    'EXCLUDE_PATHS': ['/_permission-tracer/', '/admin/'],  # Paths to exclude
+    # None (default) follows settings.DEBUG. Set True to force it on, e.g. on a staging server.
+    "ENABLED": None,
+    # Who may open the dashboard/API: a callable or dotted path taking the request.
+    # Default: active staff users. 'permission_tracer.conf.allow_in_debug' lets anyone in when DEBUG=True.
+    "ACCESS_CHECK": "permission_tracer.conf.staff_only",
+    # 'memory': per-process (fine for runserver). 'cache': uses Django's cache, shared across workers.
+    "STORAGE_BACKEND": "memory",
+    "MAX_TRACES": 100,
+    "TRACE_TIMEOUT": 3600,  # seconds, 'cache' backend only
+    "EXCLUDE_PATHS": [
+        "/admin/",
+        "/static/",
+        "/media/",
+    ],  # the tracer's own URLs are always excluded
 }
 ```
 
-## How It Works
+## How it works
 
-1. **Middleware**: Intercepts requests and tracks permission checks in real-time
-2. **Static Analysis**: Automatically discovers permission classes from your viewsets and URL patterns
-3. **Visualization**: Provides an intuitive web interface to explore and understand permission mappings
+- **Static analysis** walks your URLconf. For every DRF route it builds the view the same way DRF's
+  router would (same `initkwargs` and action map) and calls `get_permissions()` once per HTTP method.
+  The result is what DRF would actually use, not just what the `permission_classes` attribute says.
+  Django class-based views report `LoginRequiredMixin` / `PermissionRequiredMixin` /
+  `UserPassesTestMixin`. Plain function views without DRF aren't covered.
+- **Runtime tracing** wraps `APIView.check_permissions` and `APIView.check_object_permissions` once
+  at startup. Each request's trace lives in a `contextvars.ContextVar`, so it is safe under
+  threaded and async servers. Outside a traced request the wrappers just call DRF's original methods.
+  Views that override `check_permissions` themselves are not traced.
 
-<img width="1877" height="594" alt="image" src="https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24" />
+## Development
 
+```bash
+pip install -e ".[drf]" pytest pytest-django
+pytest
+```
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## License
 
+MIT License - see [LICENSE](LICENSE) file for details.
