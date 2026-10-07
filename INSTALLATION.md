@@ -116,6 +116,13 @@ This should output information about your permissions and endpoints.
 - Restart the server after changing `ENABLED`; tracing is installed at startup
 - Views that override `check_permissions()` themselves are not traced
 
+### Dashboard returns 401 / "access token is required"
+
+- That error comes from your project's own authentication middleware, which rejects requests
+  without a token before they reach the tracer
+- Wrap it with `permission_tracer.middleware.tracer_exempt`; see
+  [Projects with token or JWT authentication middleware](README.md#projects-with-token-or-jwt-authentication-middleware)
+
 ### Permission Tracer returns 403
 
 - Only active staff users can use it by default. Log in as staff, or set `ACCESS_CHECK`

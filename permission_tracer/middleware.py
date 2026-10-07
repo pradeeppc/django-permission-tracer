@@ -9,6 +9,51 @@ from django.urls import NoReverseMatch, reverse
 from . import conf, storage, tracing
 
 
+def is_tracer_path(path):
+    try:
+        prefix = reverse("permission_tracer:index")
+    except NoReverseMatch:
+        return False
+    return path.startswith(prefix)
+
+
+def tracer_exempt(middleware_class):
+    """
+    Wrap a middleware class so it lets the tracer's own URLs through while the tracer
+    is enabled, and behaves exactly as before for every other request.
+
+    For projects whose authentication middleware rejects any request without a
+    token, which would otherwise block the dashboard in a browser.
+    """
+
+    def exempt(request):
+        return conf.get("ENABLED") and is_tracer_path(request.path)
+
+    def call(self, request):
+        if exempt(request):
+            return self.get_response(request)
+        return middleware_class.__call__(self, request)
+
+    namespace = {"__call__": call, "__doc__": middleware_class.__doc__}
+    for hook in ("process_view", "process_exception", "process_template_response"):
+        original = getattr(middleware_class, hook, None)
+        if original is not None:
+            namespace[hook] = _skip_for_tracer(original, exempt, hook)
+
+    return type(f"TracerExempt{middleware_class.__name__}", (middleware_class,), namespace)
+
+
+def _skip_for_tracer(original, exempt, hook):
+    def wrapper(self, request, *args, **kwargs):
+        if exempt(request):
+            # process_template_response must hand the response back.
+            return args[0] if hook == "process_template_response" else None
+        return original(self, request, *args, **kwargs)
+
+    wrapper.__name__ = hook
+    return wrapper
+
+
 class PermissionTracerMiddleware:
     def __init__(self, get_response):
         if not conf.get("ENABLED"):
@@ -59,10 +104,4 @@ class PermissionTracerMiddleware:
         return response
 
     def _excluded(self, path):
-        try:
-            own_prefix = reverse("permission_tracer:index")
-        except NoReverseMatch:
-            own_prefix = None
-        if own_prefix and path.startswith(own_prefix):
-            return True
-        return any(path.startswith(p) for p in conf.get("EXCLUDE_PATHS"))
+        return is_tracer_path(path) or any(path.startswith(p) for p in conf.get("EXCLUDE_PATHS"))

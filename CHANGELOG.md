@@ -19,5 +19,7 @@ First release.
 - `permission_tracer_analyze` management command with text, JSON, Markdown and CSV output, and
   `--fail-on-unprotected` / `--allow` for CI.
 - Staff-only web dashboard, enabled only when `DEBUG = True` by default.
+- `tracer_exempt()` to let the dashboard through a project's token or JWT authentication
+  middleware.
 
 [0.1.0]: https://github.com/pradeeppc/django-permission-tracer/releases/tag/v0.1.0

@@ -135,6 +135,43 @@ PERMISSION_TRACER = {
 }
 ```
 
+## Projects with token or JWT authentication middleware
+
+If your project authenticates in a middleware that rejects any request without a token, opening
+the dashboard in a browser returns that middleware's error (for example `401 Authentication
+failed, access token is required`). A browser tab can't send your API's token headers.
+
+Wrap that middleware with `tracer_exempt`. The wrapped version lets the tracer's own URLs
+through while the tracer is enabled, and behaves exactly as before for every other request:
+
+```python
+# myproject/middleware.py
+from permission_tracer.middleware import tracer_exempt
+
+from myproject.auth import JWTAuthMiddleware
+
+TracerExemptJWTAuthMiddleware = tracer_exempt(JWTAuthMiddleware)
+```
+
+```python
+# settings.py: swap it in, same position in MIDDLEWARE
+MIDDLEWARE = [
+    # "myproject.auth.JWTAuthMiddleware",
+    "myproject.middleware.TracerExemptJWTAuthMiddleware",
+    # ...
+]
+```
+
+These projects usually have no Django session login either, so the default staff-only
+`ACCESS_CHECK` can't recognize anyone. For local development, use:
+
+```python
+PERMISSION_TRACER = {"ACCESS_CHECK": "permission_tracer.conf.allow_in_debug"}
+```
+
+Without the dashboard, `python manage.py permission_tracer_analyze` gives you the same
+endpoint and permission report on the command line, and needs no browser access at all.
+
 ## How it works
 
 - **Static analysis** walks your URLconf. For every DRF route it builds the view the same way DRF's
