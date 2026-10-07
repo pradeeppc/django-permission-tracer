@@ -179,6 +179,8 @@
         .badge-open { padding: 0 0.4rem; background: #ef6c00; color: white; border-radius: 8px; font-size: 0.7rem; font-weight: 400; }
         .graph-empty, .graph-hint { color: #999; font-size: 0.85rem; padding: 0.4rem 0.5rem; }
         .graph-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .graph-layout.list-hidden .graph-sidebar { display: none; }
+        .graph-buttons { display: flex; gap: 0.5rem; }
         .graph-heading { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #444; }
         .graph-heading-text { margin: 0.25rem 0; }
         .graph-warning { color: #ef6c00; }
@@ -486,6 +488,26 @@
         const SVG_FONT = "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
         let graphFocus = null;
         let graphHistory = [];
+        let graphListHidden = readGraphListHidden();
+
+        function readGraphListHidden() {
+            try {
+                return localStorage.getItem('permission-tracer:graph-list-hidden') === '1';
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function toggleGraphList() {
+            graphListHidden = !graphListHidden;
+            try {
+                localStorage.setItem('permission-tracer:graph-list-hidden', graphListHidden ? '1' : '0');
+            } catch (error) {
+                // storage unavailable; the toggle still works for this page view
+            }
+            document.querySelector('.graph-layout').classList.toggle('list-hidden', graphListHidden);
+            drawGraphFocus();
+        }
 
         function methodColor(method) {
             return METHOD_COLORS[method] || '#607d8b';
@@ -528,7 +550,7 @@
             }
 
             container.innerHTML = `
-                <div class="graph-layout">
+                <div class="graph-layout${graphListHidden ? ' list-hidden' : ''}">
                     <aside class="graph-sidebar">
                         <input id="graph-filter" type="search" placeholder="Filter permissions or endpoints" aria-label="Filter permissions or endpoints">
                         <div id="graph-picker"></div>
@@ -541,6 +563,10 @@
             const filter = document.getElementById('graph-filter');
             filter.addEventListener('input', () => renderGraphPicker(filter.value));
             container.onclick = (event) => {
+                if (event.target.closest('[data-graph-toggle]')) {
+                    toggleGraphList();
+                    return;
+                }
                 if (event.target.closest('[data-graph-back]')) {
                     const previous = graphHistory.pop();
                     if (previous) setGraphFocus(previous.type, previous.id, true);
@@ -601,10 +627,12 @@
         }
 
         function setGraphHeading(html) {
+            const toggle = `<button type="button" class="graph-back" data-graph-toggle aria-expanded="${!graphListHidden}">${graphListHidden ? 'Show list' : 'Hide list'}</button>`;
             const back = graphHistory.length ? '<button type="button" class="graph-back" data-graph-back>&larr; Back</button>' : '';
             const legend = '<div class="graph-legend">' + Object.keys(METHOD_COLORS).map(m =>
                 `<span><i style="background: ${METHOD_COLORS[m]}"></i>${m}</span>`).join('') + '</div>';
-            document.getElementById('graph-heading').innerHTML = back + `<div class="graph-heading-text">${html}</div>` + legend;
+            document.getElementById('graph-heading').innerHTML =
+                `<div class="graph-buttons">${toggle}${back}</div><div class="graph-heading-text">${html}</div>` + legend;
         }
 
         function svgText(x, y, text, opts = {}) {
