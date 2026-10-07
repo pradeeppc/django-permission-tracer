@@ -65,7 +65,8 @@ CI runs both, plus the test suite on every supported Python/Django/DRF combinati
 
 1. Update `__version__` in `permission_tracer/__init__.py` and the `CHANGELOG.md` entry
 2. Commit, then create a GitHub release with a `vX.Y.Z` tag
-3. The `publish` workflow builds the package and uploads it to PyPI
+3. The `publish` workflow builds the package and uploads it to PyPI using the
+   `PYPI_API_TOKEN` repository secret
 
 ## Reporting Issues
 
