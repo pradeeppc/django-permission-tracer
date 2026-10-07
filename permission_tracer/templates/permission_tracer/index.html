@@ -468,6 +468,7 @@
 
             const permissionNodes = graphData.nodes.filter(n => n.type === 'permission');
             const endpointNodes = graphData.nodes.filter(n => n.type === 'endpoint');
+            const nodeById = Object.fromEntries(graphData.nodes.map(n => [n.id, n]));
 
             if (permissionNodes.length === 0 && endpointNodes.length === 0) {
                 container.innerHTML = '<div class="loading">No permissions or endpoints found in graph data.</div>';
@@ -487,9 +488,11 @@
                 sortedPermissions.forEach(node => {
                     const connectedEndpoints = node.edge_count !== undefined ? node.edge_count : graphData.edges.filter(e => e.from === node.id).length;
                     const fullName = node.full_name || node.label;
+                    const open = isAllowAny(fullName);
                     html += `
-                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #e3f2fd; border-left: 4px solid #667eea; border-radius: 4px;">
-                            <strong>🔐 ${escapeHtml(node.label)}</strong>
+                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: ${open ? '#fff3e0' : '#e3f2fd'}; border-left: 4px solid ${open ? '#ef6c00' : '#667eea'}; border-radius: 4px;">
+                            <strong>${escapeHtml(node.label)}</strong>
+                            ${open ? '<span style="margin-left: 0.5rem; padding: 0.1rem 0.5rem; background: #ef6c00; color: white; border-radius: 10px; font-size: 0.75rem;">no restriction</span>' : ''}
                             <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
                                 Connected to ${connectedEndpoints} endpoint(s)
                             </div>
@@ -502,12 +505,20 @@
             if (endpointNodes.length > 0) {
                 html += '<h4 style="margin-top: 2rem; margin-bottom: 1rem; color: #667eea;">Endpoints (' + endpointNodes.length + ')</h4>';
                 endpointNodes.slice(0, 20).forEach(node => {
-                    const connectedPermissions = graphData.edges.filter(e => e.to === node.id).length;
+                    const permNames = graphData.edges
+                        .filter(e => e.to === node.id)
+                        .map(e => (nodeById[e.from] || {}).full_name || '');
+                    const open = permNames.length === 0 || permNames.every(isAllowAny);
+                    const summary = permNames.length === 0
+                        ? 'No permission classes'
+                        : open
+                            ? 'Open to everyone (AllowAny)'
+                            : `Checked by ${permNames.length} permission(s)`;
                     html += `
-                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #f5f5f5; border-left: 4px solid #4caf50; border-radius: 4px;">
-                            <strong>📡 ${escapeHtml(node.label)}</strong>
+                        <div style="margin: 0.5rem 0; padding: 0.75rem; background: #f5f5f5; border-left: 4px solid ${open ? '#ef6c00' : '#4caf50'}; border-radius: 4px;">
+                            <strong>${escapeHtml(node.label)}</strong>
                             <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
-                                Protected by ${connectedPermissions} permission(s)
+                                ${summary}
                             </div>
                         </div>
                     `;
@@ -986,6 +997,10 @@
             };
 
             document.body.appendChild(modal);
+        }
+
+        function isAllowAny(name) {
+            return name === 'rest_framework.permissions.AllowAny';
         }
 
         function escapeHtml(text) {
