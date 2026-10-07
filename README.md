@@ -23,6 +23,7 @@ HTTP method) and at runtime (for each request).
 
 <img width="1877" height="594" alt="Permission Tracer dashboard" src="https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24" />
 <img width="1329" height="837" alt="image" src="https://github.com/user-attachments/assets/4659fdc3-7459-4423-bb77-37bdf382d9e8" />
+<img width="1699" height="844" alt="image" src="https://github.com/user-attachments/assets/208af1e1-7f1f-4de4-976d-2fb49b325a9d" />
 <img width="928" height="833" alt="image" src="https://github.com/user-attachments/assets/301c90a8-5d8c-4b90-bffa-90259602b727" />
 
 
