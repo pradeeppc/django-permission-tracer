@@ -1,6 +1,9 @@
 # Django Permission Tracer
 
-🔍 **See which permissions protect each API, and find out why a request was denied.**
+🔍 **Analyze and visualize permissions across your Django REST Framework app.**
+
+See every endpoint with the permissions that guard it, find everywhere a permission is used,
+and catch endpoints that are open to anyone.
 
 Django REST Framework permissions are spread across `permission_classes`, `@action(...)` overrides,
 `get_permissions()` methods, composed expressions like `IsAuthenticated | IsOwner`, and global
@@ -12,7 +15,7 @@ HTTP method) and at runtime (for each request).
 - 🎯 **Endpoint → permissions, per HTTP method and viewset action**, including `@action` overrides,
   `get_permissions()` overrides and composed permissions (`&`, `|`, `~`)
 - 🔄 **Permission → endpoints** reverse lookup
-- 🐛 **"Why was I denied?"**: for each request, every permission's result, which one denied it, and for
+- 🐛 **Request tracing**: for each request, every permission's result, which one denied it, and for
   composed permissions which operand failed. Covers both `has_permission` and `has_object_permission`
 - 🚪 **Anonymous-access audit**: flags endpoints an unauthenticated user can reach; use it in CI with
   `--fail-on-unprotected`

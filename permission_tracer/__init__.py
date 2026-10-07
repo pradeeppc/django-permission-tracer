@@ -1,3 +1,3 @@
-"""Trace and audit Django REST Framework permissions."""
+"""Analyze and visualize permissions across a Django REST Framework app."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

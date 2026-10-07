@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "django-permission-tracer"
 dynamic = ["version"]
-description = "See which permissions protect each Django REST Framework endpoint, and why a request was denied."
+description = "Analyze and visualize permissions across your Django REST Framework app."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
