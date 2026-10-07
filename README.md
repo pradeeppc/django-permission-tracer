@@ -22,6 +22,8 @@ HTTP method) and at runtime (for each request).
 ## Screenshot
 
 <img width="1877" height="594" alt="Permission Tracer dashboard" src="https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24" />
+<img width="1890" height="860" alt="image" src="https://github.com/user-attachments/assets/87d21175-6800-4fd4-ac92-e7b0b92900ac" />
+
 
 ## Quickstart
 
