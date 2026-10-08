@@ -24,14 +24,6 @@ HTTP method) and at runtime (for each request).
 - 📝 **Permission matrix export** as Markdown or CSV, for docs, PRs and security reviews
 - 📊 Web dashboard with search and a graph view
 
-## Screenshots
-
-![Permission Tracer dashboard overview](https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24)
-
-![Endpoints and permissions in the dashboard](https://github.com/user-attachments/assets/4659fdc3-7459-4423-bb77-37bdf382d9e8)
-
-![Graph view of a permission and its endpoints](https://github.com/user-attachments/assets/208af1e1-7f1f-4de4-976d-2fb49b325a9d)
-
 ## Quickstart
 
 ```bash
