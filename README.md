@@ -5,6 +5,8 @@
 See every endpoint with the permissions that guard it, find everywhere a permission is used,
 and catch endpoints that are open to anyone.
 
+![Graph view: pick a permission to see its endpoints, click an endpoint to see each method's permissions](https://raw.githubusercontent.com/pradeeppc/django-permission-tracer/main/docs/graph-view.gif)
+
 Django REST Framework permissions are spread across `permission_classes`, `@action(...)` overrides,
 `get_permissions()` methods, composed expressions like `IsAuthenticated | IsOwner`, and global
 defaults. Permission Tracer resolves all of that for you, both statically (for every endpoint and
@@ -22,7 +24,7 @@ HTTP method) and at runtime (for each request).
 - 📝 **Permission matrix export** as Markdown or CSV, for docs, PRs and security reviews
 - 📊 Web dashboard with search and a graph view
 
-## Screenshot
+## Screenshots
 
 ![Permission Tracer dashboard overview](https://github.com/user-attachments/assets/597dbc3a-5eb1-4416-8439-2b18ba647c24)
 
