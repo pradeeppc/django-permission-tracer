@@ -20,3 +20,15 @@ def test_summarize_builtin_permission():
 
 def test_summarize_unknown_class():
     assert "error" in inspection.summarize("tests.views.DoesNotExist")
+
+
+def test_method_signature_is_not_counted_as_a_permission_check():
+    summary = inspection.summarize("tests.views.HasAllowHeader")["logic_summary"]
+    assert summary["checks_permissions"] is False
+    assert summary["methods_called"] == ["get"]
+
+
+def test_is_authenticated_counts_as_an_authentication_check():
+    summary = inspection.summarize("tests.views.IsActiveMember")["logic_summary"]
+    assert summary["checks_authentication"] is True
+    assert summary["checks_permissions"] is False

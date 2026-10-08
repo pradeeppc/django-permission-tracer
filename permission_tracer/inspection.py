@@ -34,7 +34,7 @@ _PATTERNS = {
         r"\bcurrent_user",
     ],
     "checks_groups": [r"\bgroup"],
-    "checks_authentication": [r"\bauthenticat"],
+    "checks_authentication": [r"authenticat"],
     "checks_action": [r"\baction\b"],
     "checks_method": [r"request\.method", r"\bmethod\s*(==|in)\b", r"\bsafe_methods\b"],
     "raises_exceptions": [r"\braise\s+\w+", r"permissiondenied", r"authenticationfailed"],
@@ -58,6 +58,14 @@ def _source(obj):
         return inspect.getsource(obj)
     except (OSError, TypeError):
         return None
+
+
+def _body(source):
+    """Method source without its ``def`` line, so ``has_permission`` itself doesn't
+    count as a permission check."""
+    if not source:
+        return source
+    return "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("def "))
 
 
 def _own_methods(cls):
@@ -112,7 +120,7 @@ def summarize(permission_path):
 
 
 def _logic_summary(cls):
-    source = "\n".join(filter(None, (_source(m) for _, m in _own_methods(cls))))
+    source = "\n".join(filter(None, (_body(_source(m)) for _, m in _own_methods(cls))))
     lowered = source.lower()
     summary = {
         key: any(re.search(p, lowered) for p in patterns) for key, patterns in _PATTERNS.items()

@@ -87,3 +87,8 @@ class SecretPage(LoginRequiredMixin, PermissionRequiredMixin, View):
 
     def get(self, request):
         return HttpResponse("secret")
+
+
+class IsActiveMember(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.is_active

@@ -13,7 +13,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Demo GIF of the graph view in the README.
+- Demo GIF of the graph view and permission details in the README.
+
+### Fixed
+
+- The permission logic summary marked every class as "Checks Permissions", because its
+  own `def has_permission` line matched. Method signatures are now ignored.
+- `request.user.is_authenticated` wasn't recognised as an authentication check.
 
 ## [0.1.2] - 2026-10-08
 
